@@ -4,7 +4,6 @@ author: "Sascha Jucker"
 date: "20.8.2017"
 output:
   html_document: default
-  pdf_document: default
 ---
 
 ```{r, echo = FALSE}
