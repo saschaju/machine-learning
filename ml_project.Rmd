@@ -1,0 +1,107 @@
+---
+title: "Human Activity Recognition"
+author: "Sascha Jucker"
+date: "20.8.2017"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
+```
+
+### Executive Summary
+The goal for this project is to predict the manner in which health participants did the exercise. We apply a random forest model with five fold cross validation  to predict the type of excercise of the participant in the human activity recognition project (HAR). With our model, we are able to predict 99.92% (= accuracy) of the activity types in the test data.
+
+### Data Exploration and Data Cleaning
+Load packages, set working directory, read data and check variable names
+
+```{r, echo = FALSE, result = "hide"}
+library(descr)
+library(lubridate)
+library(caret)
+library(corrplot)
+
+mywd <- "~/Google Drive/coursera/8_Machine_Learning/Week_4"
+setwd(mywd)
+
+train <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", stringsAsFactors = F)
+test <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", stringsAsFactors = F)
+colnames(train)
+```
+
+First, we convert the dependent variable to factors
+```{r, result = "hide"}
+train$classe <- as.factor(train$classe)
+```
+
+Variables related to time and the index ("X") should have no predictive power on the type of excercise. We drop them:
+```{r}
+train <- subset(train, select = -c(X, cvtd_timestamp, raw_timestamp_part_1, raw_timestamp_part_2))
+test <- subset(test, select = -c(X, cvtd_timestamp, raw_timestamp_part_1, raw_timestamp_part_2))
+```
+
+Check for NAs
+```{r}
+nacount <- colSums(is.na(train))
+freq(nacount)
+```
+
+Many variables consist of only NA values. We drop them (removes 67 variables):
+```{r}
+train <- train[ , colSums(is.na(train)) == 0]
+test <- test[ , colSums(is.na(test)) == 0]
+```
+
+Convert the variables from "num_winow" to "magnet_forearm_z" from characters to numeric. Then remove variables with NAs (removes 33 variables):
+```{r}
+trainStartNum <- grep("^num_window", colnames(train))
+trainEndNum <- grep("^magnet_forearm_z", colnames(train))
+train[, trainStartNum:trainEndNum] <- apply(train[, trainStartNum:trainEndNum], 2, as.numeric)
+testStartNum <- grep("^num_window", colnames(test))
+testEndNum <- grep("^magnet_forearm_z", colnames(test))
+test[, testStartNum:testEndNum] <- apply(test[, testStartNum:testEndNum], 2, as.numeric)
+train <- train[ , colSums(is.na(train)) == 0]
+test <- test[ , colSums(is.na(train)) == 0]
+```
+
+### Model Set Up
+Create subsamples of the train data set (train1 and test1). Train a random forest model on the train1 data set with 5-fold cross validation.
+```{r}
+set.seed(1234)
+inTrain <- createDataPartition(train$classe, p = 0.75)[[1]]
+train1 <- train[inTrain, ]
+test1 <- train[-inTrain, ]
+train_control <- trainControl(method = "cv", number = 5)
+modelFit <-  train(classe ~.,
+                   method = "rf",
+                   trainControl = train_control,
+                   allowParallel = T,
+                   ntree = 250,
+                   proximity = F,
+                   data = train1)
+```
+```{r, include = FALSE}
+load(modelFit)
+```
+
+Highest accuracy (99.8%) is reached with mtry = 31.
+```{r, eval = TRUE, echo = TRUE}
+modelFit
+```
+Predict the exercise type in the test1 data set.
+```{r}
+modelPred <- predict(modelFit, test1)
+```
+The prediction accuracy on the test data is 99.92%, i.e. the test error rate is 0.08%.
+```{r, eval = TRUE}
+confusionMatrix(modelPred, test1$classe)
+```
+Apply the model to the validation data set in order to predict the exercise type
+```{r}
+modelPredTest <- predict(modelFit, test)
+```
+```{r, eval = TRUE}
+modelPredTest
+```
